@@ -1,0 +1,225 @@
+---
+title: "Notizen - Sitzung 13"
+author: "Jonas Schulte"
+date: "05.07.2023"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
+
+# Verwendete Packages
+```{r}
+library(here)
+library(data.table)
+library(tidyverse)
+library(ggplot2)
+library(ggfortify)
+library(car)
+library(lmtest)
+library(sandwich)
+```
+
+
+# Datensatz einlesen
+```{r}
+data_path <- here("data/bip-mortrate.csv")
+lifeexp_data <- fread(data_path, 
+                      colClasses = c("character", "integer", rep("double", 5)))
+head(lifeexp_data, 3)
+```
+
+
+# Regressionen: Lebenserwartung und BIP pro Kopf
+## Modelle
+```{r}
+model1 <- lm(LIFEEXP ~ GDP_PPPpc, lifeexp_data)
+summary(model1)
+
+model2 <- lm(LIFEEXP ~ log(GDP_PPPpc), lifeexp_data)
+summary(model2)
+
+model3 <- lm(log(LIFEEXP) ~ log(GDP_PPPpc), lifeexp_data)
+summary(model3)
+
+model4 <- lm(LIFEEXP ~ log(GDP_PPPpc) + I(log(GDP_PPPpc)**2), lifeexp_data)
+summary(model4)
+```
+
+## Regressionsdiagnostik
+### Scatter-Plots
+
+```{r}
+# Modell 1
+ggplot(lifeexp_data, aes(x = GDP_PPPpc, y = LIFEEXP))+
+  geom_point()+
+  geom_smooth(method = "lm")
+
+avPlots(model1)
+```
+
+```{r}
+# Modell 2
+ggplot(lifeexp_data, aes(x = log(GDP_PPPpc), y = LIFEEXP))+
+  geom_point()+
+  geom_smooth(method = "lm")
+```
+
+
+```{r}
+# Modell 3
+ggplot(lifeexp_data, aes(x = log(GDP_PPPpc), y = log(LIFEEXP)))+
+  geom_point()+
+  geom_smooth(method = "lm")
+```
+
+
+
+```{r}
+# Modell 4
+ggplot(lifeexp_data, aes(x = log(GDP_PPPpc), y = log(LIFEEXP)))+
+  geom_point()+
+  geom_smooth(method = "lm", formula = y ~ x + I(x**2))
+```
+
+
+### RESET-Test
+```{r}
+library(lmtest)
+resettest(model1) 
+resettest(model2)
+resettest(model3)
+resettest(model4, power = 3)
+```
+
+### TA-Plot, QQ_plot, etc.
+```{r}
+plot(model1)
+plot(model2)
+plot(model3)
+plot(model4)
+
+library(ggfortify)
+autoplot(model1)
+```
+### Test auf Hetereoskedastie 
+#### Breusch-Pagan Test
+- $H_0$ = Homoskedastie
+
+```{r}
+library(lmtest)
+bptest(model1)
+bptest(model2)
+bptest(model3)
+bptest(model4)
+```
+
+#### Goldfeld-Quandt Test
+- $H_0$ = Homoskedastie
+
+```{r}
+gqtest(model1, alternative = "less")
+gqtest(model1, alternative = "greater") # Default
+gqtest(model1, alternative = "two.sided")
+gqtest(model2)
+gqtest(model3)
+gqtest(model4)
+```
+#### Reaktion auf Heteroskedastie
+Siehe Skript!
+
+```{r}
+var_covar_matrix <- sandwich::vcovHC(model2, type = "HC1")
+lmtest::coeftest(model2, vcov. = var_covar_matrix)
+summary(model2)
+```
+
+
+
+
+# Übungsaufgabe: Regression Lebenserwartung und Gini
+Experimentiere mit unterschiedlichen Regressionsmodellen.
+
+## Modelle
+
+```{r}
+model5 <- lm(LIFEEXP ~ GINI_post, lifeexp_data)
+summary(model5)
+
+model6 <- lm(LIFEEXP ~ log(GINI_post), lifeexp_data)
+summary(model6)
+
+model7 <- lm(log(LIFEEXP) ~ GINI_post, lifeexp_data)
+summary(model7)
+
+model8 <- lm(log(LIFEEXP) ~ log(GINI_post), lifeexp_data)
+summary(model8)
+```
+## Regressionsdiagnostik
+### Plots
+```{r}
+avPlots(model5)
+avPlots(model6)
+avPlots(model7)
+avPlots(model8)
+```
+
+### AV-Plot, QQ-Plot, etc.
+```{r}
+autoplot(model5)
+autoplot(model6)
+autoplot(model7)
+autoplot(model8)
+```
+
+
+
+# Multivariate Regression
+## Modelle und Diagnostik
+```{r}
+model9 <- lm(LIFEEXP ~ log(GDP_PPPpc) + GINI_post, lifeexp_data)
+summary(model9)
+avPlots(model9)
+plot(model9)
+
+model10 <- lm(LIFEEXP ~ log(GDP_PPPpc) + log(GINI_post), lifeexp_data)
+summary(model10)
+avPlots(model10)
+plot(model10)
+
+model11 <- lm(log(LIFEEXP) ~ log(GDP_PPPpc) + GINI_post, lifeexp_data)
+summary(model11)
+avPlots(model11)
+plot(model11)
+
+model12 <- lm(log(LIFEEXP) ~ log(GDP_PPPpc) + log(GINI_post), lifeexp_data)
+summary(model12)
+avPlots(model12)
+plot(model12)
+```
+
+
+
+
+## Übungsaufgabe AV-Plot
+Erstelle den Added-Variable Plot von `model9` manuell. Gehe dabei wie folgt vor:
+1. Regressiere die Lebenserwartung auf den GINI_post und speichere die Residuen in einem Objekt.
+2. Regressiere den Logarithmus des BIP pro Kopf auf den GINI_post und speichere die Residuen in einem Objekt.
+3. Regressiere die in 1. gespeicherten Residuen auf die Residuen aus Teilaufgabe 2.
+4. Stelle die Residuen aus 1. und 2. in einem Scatterplot dar (x = Residuen aus 2., y = Residuen aus 1.) und füge eine Regressionslinie hinzu. (Hinweis: entweder mit abline(das_model_aus_3) oder mit geom_smooth(method = "lm") in ggplot)
+5. Vergleiche den Plot mit dem Plot, den man mit der Funktion `avPlots()` erhält.
+
+```{r}
+residuals_LIFEEXP <- residuals(lm(LIFEEXP ~ GINI_post, lifeexp_data))
+residuals_GDP_PPPpc <- residuals(lm(log(GDP_PPPpc) ~ GINI_post, lifeexp_data))
+
+av_model <- lm(residuals_LIFEEXP ~ residuals_GDP_PPPpc)
+
+plot(residuals_GDP_PPPpc, residuals_LIFEEXP)
+abline(av_model, col = "blue")
+
+avPlot(model9, "log(GDP_PPPpc)")
+```
+
+
